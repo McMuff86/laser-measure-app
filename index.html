@@ -19,6 +19,7 @@
             --accent-dim: rgba(34, 211, 238, 0.15);
             --success: #4ade80;
             --danger: #f87171;
+            --warning: #facc15;
         }
         body {
             font-family: -apple-system, BlinkMacSystemFont, 'Inter', 'Segoe UI', sans-serif;
@@ -61,7 +62,7 @@
             box-shadow: 0 0 8px rgba(74, 222, 128, 0.5);
         }
         .status-dot.connecting {
-            background: #facc15;
+            background: var(--warning);
             animation: pulse 1s infinite;
         }
         @keyframes pulse {
@@ -112,6 +113,15 @@
             border: 1px solid var(--border);
             border-radius: 12px;
             margin-bottom: 16px;
+            position: relative;
+            overflow: hidden;
+        }
+        .measure-display.flash {
+            animation: flash-border 0.4s ease-out;
+        }
+        @keyframes flash-border {
+            0% { border-color: var(--accent); box-shadow: 0 0 20px rgba(34, 211, 238, 0.3); }
+            100% { border-color: var(--border); box-shadow: none; }
         }
         .measure-value {
             font-size: 3rem;
@@ -173,6 +183,12 @@
         .field-btn.active {
             border-color: var(--accent);
             background: var(--accent-dim);
+        }
+        .field-btn.filled {
+            border-color: var(--success);
+        }
+        .field-btn.active.filled {
+            border-color: var(--accent);
         }
         .field-btn .field-name {
             font-size: 0.75rem;
@@ -253,11 +269,12 @@
             border: 1px solid var(--border);
             border-radius: 8px;
             padding: 10px;
-            max-height: 120px;
+            max-height: 200px;
             overflow-y: auto;
             margin-bottom: 16px;
             font-family: 'SF Mono', 'Fira Code', monospace;
             display: none;
+            word-break: break-all;
         }
         .log.show { display: block; }
         .empty-state {
@@ -276,11 +293,28 @@
             opacity: 0.6;
         }
         .delete-btn:active { opacity: 1; }
+        .info-box {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 12px;
+            margin-bottom: 16px;
+            font-size: 0.8rem;
+            color: var(--muted);
+            line-height: 1.5;
+        }
+        .info-box strong { color: var(--text); }
+        .vibrate { animation: shake 0.3s; }
+        @keyframes shake {
+            0%, 100% { transform: translateX(0); }
+            25% { transform: translateX(-4px); }
+            75% { transform: translateX(4px); }
+        }
     </style>
 </head>
 <body>
     <h1>📐 Laser Measure</h1>
-    <p class="subtitle">Bosch GLM 50C → Türen-Masse</p>
+    <p class="subtitle">Bosch GLM 50C / 50CG → Türen-Masse via BLE</p>
 
     <!-- Connection Status -->
     <div class="status-bar">
@@ -290,8 +324,17 @@
         <button class="btn" id="connectBtn" onclick="toggleConnection()">Verbinden</button>
     </div>
 
+    <!-- Info for first-time users -->
+    <div class="info-box" id="infoBox">
+        <strong>So geht's:</strong><br>
+        1. Bosch GLM einschalten + Bluetooth aktivieren (BT-Symbol auf Gerät)<br>
+        2. "Verbinden" drücken → Gerät auswählen<br>
+        3. Am Messgerät messen → Wert erscheint automatisch<br>
+        <em>Benötigt Chrome/Edge auf Android oder Desktop (HTTPS)</em>
+    </div>
+
     <!-- Last Measurement Display -->
-    <div class="measure-display">
+    <div class="measure-display" id="measureDisplay">
         <div class="measure-value" id="measureValue">—</div>
         <div class="measure-label" id="measureLabel">Warte auf Messung...</div>
     </div>
@@ -300,24 +343,19 @@
     <div class="door-input">
         <label>Tür:</label>
         <input type="text" id="doorId" placeholder="z.B. OH1-EG-101" value="">
-        <select id="doorField" onchange="updateFieldButtons()">
-            <option value="breite">Breite</option>
-            <option value="hoehe">Höhe</option>
-            <option value="wandstaerke">Wandstärke</option>
-        </select>
     </div>
 
     <!-- Quick Field Buttons -->
     <div class="field-row" id="fieldRow">
-        <div class="field-btn active" onclick="selectField('breite')">
+        <div class="field-btn active" data-field="breite" onclick="selectField('breite')">
             <div class="field-name">Breite</div>
             <div class="field-value" id="val-breite">—</div>
         </div>
-        <div class="field-btn" onclick="selectField('hoehe')">
+        <div class="field-btn" data-field="hoehe" onclick="selectField('hoehe')">
             <div class="field-name">Höhe</div>
             <div class="field-value" id="val-hoehe">—</div>
         </div>
-        <div class="field-btn" onclick="selectField('wandstaerke')">
+        <div class="field-btn" data-field="wandstaerke" onclick="selectField('wandstaerke')">
             <div class="field-name">Wandstärke</div>
             <div class="field-value" id="val-wandstaerke">—</div>
         </div>
@@ -325,7 +363,6 @@
 
     <!-- Action Buttons -->
     <div class="btn-row">
-        <button class="btn primary" id="measureBtn" onclick="triggerMeasure()" disabled>📏 Messen</button>
         <button class="btn" onclick="saveDoor()">💾 Tür speichern</button>
         <button class="btn" onclick="nextDoor()">➡️ Nächste</button>
         <button class="btn" onclick="toggleManual()">✏️ Manuell</button>
@@ -370,33 +407,65 @@
     </div>
 
     <script>
-        // ── BLE Constants (Bosch GLM) ──
-        const GLM_SERVICE_UUID    = '00005301-0000-0041-5253-534f46540000';
-        const GLM_CHAR_UUID       = '00004301-0000-0041-5253-534f46540000';
-        
-        // Commands (same as RFCOMM protocol)
-        const CMD_MEASURE    = new Uint8Array([0xC0, 0x40, 0x00, 0xEE]);
-        const CMD_LASER_ON   = new Uint8Array([0xC0, 0x41, 0x00, 0x96]);
-        const CMD_LASER_OFF  = new Uint8Array([0xC0, 0x42, 0x00, 0x1E]);
+        // ═══════════════════════════════════════════════════════════════
+        // Bosch GLM 50C / 50CG BLE Protocol
+        // ═══════════════════════════════════════════════════════════════
+        //
+        // Source: Reverse-engineered from MeasureOn app BLE captures
+        // Refs: github.com/ketan/Bosch-GLM50C-Rangefinder (ESP32 + Python)
+        //       eevblog.com/forum/projects/hacking-the-bosch-glm-20-laser-measuring-tape/
+        //
+        // The GLM 50C uses BLE (not classic Bluetooth RFCOMM).
+        // It exposes a custom GATT service with one read/write/notify characteristic.
+        //
+        // Protocol:
+        //   Service UUID:        02a6c0d0-0451-4000-b000-fb3210111989
+        //   Characteristic UUID: 02a6c0d1-0451-4000-b000-fb3210111989
+        //
+        //   After connecting + subscribing to notifications:
+        //   Send sync command: [0xC0, 0x55, 0x02, 0x01, 0x00, 0x1A]
+        //   This tells the device to send measurement data on button press.
+        //
+        //   Measurement notification format:
+        //   Prefix: C0 55 10 06 ...
+        //   Bytes 7-10: IEEE 754 float32 (little-endian) = distance in meters
+        //
+        //   The older RFCOMM protocol (C0 40 00 EE = measure) uses different
+        //   framing but similar concept. Over BLE we use the "sync" approach.
+        //
+        // ═══════════════════════════════════════════════════════════════
+
+        const BLE_SERVICE_UUID  = '02a6c0d0-0451-4000-b000-fb3210111989';
+        const BLE_CHAR_UUID     = '02a6c0d1-0451-4000-b000-fb3210111989';
+
+        // Sync command: enables measurement indications over BLE
+        const CMD_SYNC = new Uint8Array([0xC0, 0x55, 0x02, 0x01, 0x00, 0x1A]);
+
+        // Legacy RFCOMM-style commands (may work over BLE on some models)
+        const CMD_MEASURE   = new Uint8Array([0xC0, 0x40, 0x00, 0xEE]);
+        const CMD_LASER_ON  = new Uint8Array([0xC0, 0x41, 0x00, 0x96]);
+        const CMD_LASER_OFF = new Uint8Array([0xC0, 0x42, 0x00, 0x1E]);
 
         // ── State ──
         let device = null;
+        let server = null;
         let characteristic = null;
         let connected = false;
+        let reconnecting = false;
         let currentField = 'breite';
         let currentDoor = { breite: null, hoehe: null, wandstaerke: null };
         let measurements = JSON.parse(localStorage.getItem('laser-measurements') || '[]');
-        let notifyMode = false;
+        const fieldOrder = ['breite', 'hoehe', 'wandstaerke'];
 
         // ── UI Helpers ──
         const $ = id => document.getElementById(id);
-        
+
         function log(msg) {
             const el = $('debugLog');
             const time = new Date().toLocaleTimeString('de-CH');
             el.innerHTML += `[${time}] ${msg}\n`;
             el.scrollTop = el.scrollHeight;
-            console.log(msg);
+            console.log(`[LaserMeasure] ${msg}`);
         }
 
         function setStatus(state, text) {
@@ -404,48 +473,69 @@
             $('statusText').textContent = text;
         }
 
-        function updateMeasureDisplay(value) {
-            if (value === null) {
+        function vibrate(ms = 50) {
+            if (navigator.vibrate) navigator.vibrate(ms);
+        }
+
+        function flashDisplay() {
+            const el = $('measureDisplay');
+            el.classList.remove('flash');
+            void el.offsetWidth; // reflow
+            el.classList.add('flash');
+        }
+
+        function updateMeasureDisplay(valueMm) {
+            if (valueMm === null) {
                 $('measureValue').textContent = '—';
                 $('measureLabel').textContent = 'Warte auf Messung...';
                 return;
             }
-            const mm = Math.round(value);
+            const mm = Math.round(valueMm);
             $('measureValue').innerHTML = `${mm}<span class="measure-unit">mm</span>`;
             $('measureLabel').textContent = `→ ${currentField} für ${$('doorId').value || '(keine Tür)'}`;
+            flashDisplay();
+            vibrate(30);
         }
 
         function selectField(field) {
             currentField = field;
-            $('doorField').value = field;
-            updateFieldButtons();
+            document.querySelectorAll('.field-btn').forEach(btn => {
+                const f = btn.dataset.field;
+                btn.classList.toggle('active', f === currentField);
+            });
         }
 
-        function updateFieldButtons() {
-            currentField = $('doorField').value;
-            document.querySelectorAll('.field-btn').forEach(btn => {
-                const f = btn.querySelector('.field-name').textContent.toLowerCase().replace('ä', 'ae');
-                const key = f === 'breite' ? 'breite' : f === 'höhe' ? 'hoehe' : 'wandstaerke';
-                // Simplified mapping
-                const fieldMap = { 'breite': 'breite', 'höhe': 'hoehe', 'wandstärke': 'wandstaerke' };
-                const mapped = fieldMap[f] || f;
-                btn.classList.toggle('active', mapped === currentField);
+        function updateFieldDisplay() {
+            fieldOrder.forEach(f => {
+                const el = $('val-' + f);
+                const btn = document.querySelector(`.field-btn[data-field="${f}"]`);
+                if (currentDoor[f] !== null) {
+                    el.textContent = currentDoor[f];
+                    btn.classList.add('filled');
+                } else {
+                    el.textContent = '—';
+                    btn.classList.remove('filled');
+                }
             });
         }
 
         function applyValue(valueMm) {
             const mm = Math.round(valueMm);
             currentDoor[currentField] = mm;
-            const valEl = $('val-' + currentField);
-            if (valEl) valEl.textContent = mm;
+            updateFieldDisplay();
             updateMeasureDisplay(mm);
-            
+
             // Auto-advance to next empty field
-            const fields = ['breite', 'hoehe', 'wandstaerke'];
-            const nextEmpty = fields.find(f => currentDoor[f] === null && f !== currentField);
-            if (nextEmpty) {
-                setTimeout(() => selectField(nextEmpty), 300);
+            const currentIdx = fieldOrder.indexOf(currentField);
+            for (let i = 1; i <= fieldOrder.length; i++) {
+                const nextField = fieldOrder[(currentIdx + i) % fieldOrder.length];
+                if (currentDoor[nextField] === null) {
+                    setTimeout(() => selectField(nextField), 300);
+                    return;
+                }
             }
+            // All fields filled – indicate completion
+            log('✅ Alle 3 Felder gemessen – Tür speichern oder Nächste');
         }
 
         // ── BLE Connection ──
@@ -459,8 +549,8 @@
 
         async function connect() {
             if (!navigator.bluetooth) {
-                log('❌ Web Bluetooth nicht unterstützt! Nutze Chrome auf Android.');
-                alert('Web Bluetooth wird in diesem Browser nicht unterstützt.\nBitte Chrome auf Android nutzen.');
+                log('❌ Web Bluetooth nicht verfügbar!');
+                alert('Web Bluetooth wird in diesem Browser nicht unterstützt.\n\nBenötigt:\n• Chrome/Edge auf Android\n• Chrome auf Desktop (mit Flag oder HTTPS)\n• Kein iOS/Safari Support');
                 return;
             }
 
@@ -470,73 +560,113 @@
             log('🔍 Starte Bluetooth-Scan...');
 
             try {
-                // Accept all BLE devices so user can find the GLM regardless of name
-                device = await navigator.bluetooth.requestDevice({
-                    acceptAllDevices: true,
-                    optionalServices: [GLM_SERVICE_UUID],
-                });
+                // Request device – try name filter first, fall back to acceptAll
+                try {
+                    device = await navigator.bluetooth.requestDevice({
+                        filters: [
+                            { namePrefix: 'Bosch' },
+                            { namePrefix: 'GLM' },
+                            { namePrefix: 'PLR' },
+                            { services: [BLE_SERVICE_UUID] }
+                        ],
+                        optionalServices: [BLE_SERVICE_UUID]
+                    });
+                } catch (filterErr) {
+                    // If no device found with filters, try acceptAllDevices
+                    log('⚠️ Filter-Scan fehlgeschlagen, versuche breiten Scan...');
+                    device = await navigator.bluetooth.requestDevice({
+                        acceptAllDevices: true,
+                        optionalServices: [BLE_SERVICE_UUID]
+                    });
+                }
 
-                log(`📱 Gerät gefunden: ${device.name || 'unbekannt'}`);
+                log(`📱 Gerät gewählt: ${device.name || device.id}`);
                 device.addEventListener('gattserverdisconnected', onDisconnected);
 
-                setStatus('connecting', 'Verbinde...');
-                const server = await device.gatt.connect();
-                log('🔗 GATT verbunden');
-
-                // Try to get the GLM service
-                let service;
-                try {
-                    service = await server.getPrimaryService(GLM_SERVICE_UUID);
-                    log('✅ GLM Service gefunden');
-                } catch (e) {
-                    log('⚠️ GLM Service nicht gefunden, liste Services...');
-                    // Try to discover what services are available
-                    try {
-                        const services = await server.getPrimaryServices();
-                        services.forEach(s => log(`  Service: ${s.uuid}`));
-                    } catch (e2) {
-                        log('  Kann Services nicht auflisten');
-                    }
-                    throw new Error('GLM Bluetooth Service nicht gefunden. Gerät kompatibel?');
-                }
-
-                // Get characteristic
-                characteristic = await service.getCharacteristic(GLM_CHAR_UUID);
-                log('✅ Characteristic gefunden');
-
-                // Try to subscribe to notifications
-                try {
-                    await characteristic.startNotifications();
-                    characteristic.addEventListener('characteristicvaluechanged', onNotification);
-                    notifyMode = true;
-                    log('✅ Notifications aktiv – Messwerte kommen automatisch');
-                } catch (e) {
-                    notifyMode = false;
-                    log('⚠️ Notifications nicht unterstützt, nutze Polling');
-                }
-
-                connected = true;
-                setStatus('connected', `Verbunden: ${device.name || 'GLM'}`);
-                $('connectBtn').textContent = 'Trennen';
-                $('connectBtn').disabled = false;
-                $('measureBtn').disabled = false;
-
-                // Turn laser on
-                try {
-                    await characteristic.writeValue(CMD_LASER_ON);
-                    log('🔴 Laser eingeschaltet');
-                } catch(e) {
-                    log('⚠️ Laser-Befehl fehlgeschlagen: ' + e.message);
-                }
+                await connectToDevice();
 
             } catch (err) {
                 log('❌ Fehler: ' + err.message);
-                setStatus('', 'Verbindung fehlgeschlagen');
+                if (err.message.includes('cancelled') || err.message.includes('canceled')) {
+                    setStatus('', 'Abgebrochen');
+                } else {
+                    setStatus('', 'Verbindung fehlgeschlagen');
+                }
                 $('connectBtn').textContent = 'Verbinden';
                 $('connectBtn').disabled = false;
-                if (err.message.includes('User cancelled')) {
-                    setStatus('', 'Abgebrochen');
+            }
+        }
+
+        async function connectToDevice() {
+            setStatus('connecting', 'Verbinde...');
+            $('connectBtn').textContent = 'Verbinde...';
+            $('connectBtn').disabled = true;
+
+            try {
+                server = await device.gatt.connect();
+                log('🔗 GATT Server verbunden');
+
+                // Get GLM BLE service
+                let service;
+                try {
+                    service = await server.getPrimaryService(BLE_SERVICE_UUID);
+                    log('✅ GLM BLE Service gefunden');
+                } catch (e) {
+                    log('⚠️ GLM Service nicht gefunden!');
+
+                    // Debug: list available services
+                    try {
+                        const services = await server.getPrimaryServices();
+                        log(`📋 Verfügbare Services (${services.length}):`);
+                        services.forEach(s => log(`  → ${s.uuid}`));
+                    } catch (e2) {
+                        log('  Kann Services nicht auflisten');
+                    }
+                    throw new Error('Bosch GLM BLE Service nicht gefunden. Ist das Gerät ein GLM 50C/50CG?');
                 }
+
+                // Get characteristic
+                characteristic = await service.getCharacteristic(BLE_CHAR_UUID);
+                log('✅ Characteristic gefunden');
+
+                // Subscribe to notifications/indications
+                await characteristic.startNotifications();
+                characteristic.addEventListener('characteristicvaluechanged', onBleNotification);
+                log('✅ Notifications aktiv');
+
+                // Send sync command to enable measurement data
+                await new Promise(r => setTimeout(r, 300));
+                try {
+                    await characteristic.writeValueWithResponse(CMD_SYNC);
+                    log('✅ Sync-Befehl gesendet (Messungen aktiviert)');
+                } catch (e) {
+                    try {
+                        await characteristic.writeValueWithoutResponse(CMD_SYNC);
+                        log('✅ Sync-Befehl gesendet (ohne Response)');
+                    } catch (e2) {
+                        log('⚠️ Sync-Befehl fehlgeschlagen: ' + e2.message);
+                    }
+                }
+
+                // Try turning laser on
+                try {
+                    await characteristic.writeValueWithResponse(CMD_LASER_ON);
+                    log('🔴 Laser eingeschaltet');
+                } catch (e) {
+                    log('ℹ️ Laser-Befehl nicht unterstützt (normal bei BLE)');
+                }
+
+                connected = true;
+                reconnecting = false;
+                setStatus('connected', `Verbunden: ${device.name || 'GLM'}`);
+                $('connectBtn').textContent = 'Trennen';
+                $('connectBtn').disabled = false;
+                $('infoBox').style.display = 'none';
+
+                log('🎯 Bereit! Drücke den Mess-Knopf am Gerät.');
+
+            } catch (err) {
+                throw err;
             }
         }
 
@@ -548,82 +678,112 @@
         }
 
         function onDisconnected() {
+            const wasConnected = connected;
             connected = false;
             characteristic = null;
-            notifyMode = false;
+            server = null;
             setStatus('', 'Getrennt');
             $('connectBtn').textContent = 'Verbinden';
             $('connectBtn').disabled = false;
-            $('measureBtn').disabled = true;
             log('🔌 Verbindung getrennt');
+
+            // Auto-reconnect if unexpected disconnect
+            if (wasConnected && device && !reconnecting) {
+                reconnecting = true;
+                log('🔄 Versuche Reconnect in 2s...');
+                setStatus('connecting', 'Reconnect...');
+                setTimeout(async () => {
+                    try {
+                        await connectToDevice();
+                        log('✅ Reconnect erfolgreich!');
+                    } catch (e) {
+                        log('❌ Reconnect fehlgeschlagen: ' + e.message);
+                        reconnecting = false;
+                        setStatus('', 'Getrennt – erneut verbinden');
+                        $('connectBtn').textContent = 'Verbinden';
+                        $('connectBtn').disabled = false;
+                    }
+                }, 2000);
+            }
         }
 
-        // ── Measurement ──
-        function onNotification(event) {
+        // ── BLE Notification Handler ──
+        function onBleNotification(event) {
             const data = new Uint8Array(event.target.value.buffer);
-            log('📨 Notification: ' + Array.from(data).map(b => b.toString(16).padStart(2, '0')).join(' '));
+            const hex = Array.from(data).map(b => b.toString(16).padStart(2, '0')).join(' ');
+            log(`📨 BLE Data (${data.length}B): ${hex}`);
+
+            // Parse measurement
             parseMeasurement(data);
         }
 
         function parseMeasurement(data) {
-            if (data.length < 6) {
-                log('⚠️ Zu wenig Daten: ' + data.length + ' bytes');
+            // ── BLE Protocol (GLM 50C/50CG) ──
+            // Measurement notification: C0 55 10 06 ... (20+ bytes)
+            // Bytes 7-10: float32 LE = distance in meters
+            if (data.length >= 11 && data[0] === 0xC0 && data[1] === 0x55) {
+                // Check for measurement data subtype
+                if (data[2] === 0x10 && data[3] === 0x06) {
+                    // Extract distance: float32 little-endian at offset 7
+                    const buf = new ArrayBuffer(4);
+                    const view = new DataView(buf);
+                    view.setUint8(0, data[7]);
+                    view.setUint8(1, data[8]);
+                    view.setUint8(2, data[9]);
+                    view.setUint8(3, data[10]);
+                    const distanceM = view.getFloat32(0, true); // little-endian
+                    const distanceMm = distanceM * 1000;
+
+                    if (distanceMm > 0 && distanceMm < 100000) { // sanity check: 0-100m
+                        log(`📏 Distanz: ${distanceMm.toFixed(1)} mm (${distanceM.toFixed(4)} m)`);
+                        applyValue(distanceMm);
+                        return;
+                    } else {
+                        log(`⚠️ Unplausible Distanz: ${distanceMm.toFixed(1)} mm – ignoriert`);
+                    }
+                }
+
+                // Other C0 55 subtypes – log but don't parse
+                log(`ℹ️ GLM Nachricht Typ: ${data[2].toString(16)}/${data[3].toString(16)}`);
                 return;
             }
 
-            // Status byte
-            const status = data[0];
-            if (status !== 0) {
-                log('⚠️ Gerätestatus: ' + status);
-                return;
+            // ── Legacy RFCOMM-style response (some models) ──
+            // Response: [status][length][data...][checksum]
+            // Status 0 = ok, distance at bytes 2-5 as uint32 * 0.05mm
+            if (data.length >= 6 && data[0] === 0x00) {
+                const raw = data[2] | (data[3] << 8) | (data[4] << 16) | (data[5] << 24);
+                const distanceMm = raw * 0.05;
+                if (distanceMm > 0 && distanceMm < 100000) {
+                    log(`📏 Distanz (legacy): ${distanceMm.toFixed(1)} mm`);
+                    applyValue(distanceMm);
+                    return;
+                }
             }
 
-            // Distance: 4 bytes little-endian uint32 at offset 2, multiply by 0.05
-            const raw = data[2] | (data[3] << 8) | (data[4] << 16) | (data[5] << 24);
-            const distanceMm = raw * 0.05;
-            
-            log(`📏 Messung: ${distanceMm.toFixed(1)} mm (raw: ${raw})`);
-            applyValue(distanceMm);
+            log('ℹ️ Unbekanntes Datenformat – prüfe Debug Log');
         }
 
+        // ── Trigger remote measurement (try both protocols) ──
         async function triggerMeasure() {
             if (!connected || !characteristic) {
                 log('❌ Nicht verbunden');
                 return;
             }
 
-            $('measureBtn').disabled = true;
             log('📏 Sende Mess-Befehl...');
-
             try {
-                // Try writeValueWithResponse first, fallback to writeValueWithoutResponse
-                try {
-                    await characteristic.writeValueWithResponse(CMD_MEASURE);
-                } catch(e) {
-                    await characteristic.writeValueWithoutResponse(CMD_MEASURE);
-                }
+                // Try RFCOMM-style measure command
+                await characteristic.writeValueWithResponse(CMD_MEASURE);
                 log('✅ Mess-Befehl gesendet');
-
-                // If no notification mode, read the response
-                if (!notifyMode) {
-                    setTimeout(async () => {
-                        try {
-                            const value = await characteristic.readValue();
-                            const data = new Uint8Array(value.buffer);
-                            log('📨 Antwort: ' + Array.from(data).map(b => b.toString(16).padStart(2, '0')).join(' '));
-                            parseMeasurement(data);
-                        } catch(e) {
-                            log('⚠️ Lesen fehlgeschlagen: ' + e.message);
-                        }
-                        $('measureBtn').disabled = false;
-                    }, 1500);
-                    return;
+            } catch (e) {
+                try {
+                    await characteristic.writeValueWithoutResponse(CMD_MEASURE);
+                    log('✅ Mess-Befehl gesendet (ohne Response)');
+                } catch (e2) {
+                    log('⚠️ Remote-Messung nicht möglich – bitte Knopf am Gerät drücken');
                 }
-            } catch (err) {
-                log('❌ Mess-Fehler: ' + err.message);
             }
-
-            setTimeout(() => { $('measureBtn').disabled = false; }, 500);
         }
 
         // ── Manual Input ──
@@ -637,12 +797,12 @@
 
         function applyManual() {
             const val = parseFloat($('manualValue').value);
-            if (isNaN(val)) return;
+            if (isNaN(val) || val <= 0) return;
+            log(`✏️ Manueller Wert: ${val} mm`);
             applyValue(val);
             $('manualValue').value = '';
         }
 
-        // Listen for Enter in manual input
         document.addEventListener('keydown', e => {
             if (e.key === 'Enter' && document.activeElement === $('manualValue')) {
                 applyManual();
@@ -658,7 +818,12 @@
                 return;
             }
 
-            // Check if door already exists → update
+            // Must have at least one value
+            if (currentDoor.breite === null && currentDoor.hoehe === null && currentDoor.wandstaerke === null) {
+                alert('Mindestens ein Wert muss gemessen sein');
+                return;
+            }
+
             const existing = measurements.findIndex(m => m.id === id);
             const entry = {
                 id,
@@ -670,22 +835,24 @@
 
             if (existing >= 0) {
                 measurements[existing] = entry;
+                log(`💾 Tür ${id} aktualisiert`);
             } else {
                 measurements.push(entry);
+                log(`💾 Tür ${id} gespeichert`);
             }
 
             save();
             renderTable();
-            log(`💾 Tür ${id} gespeichert`);
+            vibrate(100);
         }
 
         function nextDoor() {
-            // Auto-save if we have data
-            if ($('doorId').value.trim() && (currentDoor.breite || currentDoor.hoehe || currentDoor.wandstaerke)) {
+            // Auto-save if data exists
+            if ($('doorId').value.trim() && (currentDoor.breite !== null || currentDoor.hoehe !== null || currentDoor.wandstaerke !== null)) {
                 saveDoor();
             }
 
-            // Increment door number
+            // Auto-increment door number
             const current = $('doorId').value;
             const match = current.match(/^(.*?)(\d+)$/);
             if (match) {
@@ -697,14 +864,13 @@
 
             // Reset fields
             currentDoor = { breite: null, hoehe: null, wandstaerke: null };
-            $('val-breite').textContent = '—';
-            $('val-hoehe').textContent = '—';
-            $('val-wandstaerke').textContent = '—';
+            updateFieldDisplay();
             selectField('breite');
             updateMeasureDisplay(null);
         }
 
         function deleteRow(idx) {
+            if (!confirm(`Tür "${measurements[idx].id}" löschen?`)) return;
             measurements.splice(idx, 1);
             save();
             renderTable();
@@ -737,7 +903,7 @@
             `).reverse().join('');
         }
 
-        // ── Export ──
+        // ── CSV Export ──
         function exportCSV() {
             if (measurements.length === 0) {
                 alert('Keine Messungen zum Exportieren');
@@ -745,7 +911,7 @@
             }
 
             const header = 'Tür;Breite (mm);Höhe (mm);Wandstärke (mm);Zeitpunkt\n';
-            const rows = measurements.map(m => 
+            const rows = measurements.map(m =>
                 `${m.id};${m.breite ?? ''};${m.hoehe ?? ''};${m.wandstaerke ?? ''};${m.timestamp}`
             ).join('\n');
 
@@ -753,14 +919,14 @@
             const url = URL.createObjectURL(blob);
             const a = document.createElement('a');
             a.href = url;
-            a.download = `tuermasse-${new Date().toISOString().slice(0,10)}.csv`;
+            a.download = `tuermasse-${new Date().toISOString().slice(0, 10)}.csv`;
             a.click();
             URL.revokeObjectURL(url);
-            log('📥 CSV exportiert');
+            log('📥 CSV exportiert (' + measurements.length + ' Türen)');
         }
 
         function clearAll() {
-            if (!confirm('Alle Messungen löschen?')) return;
+            if (!confirm('Alle Messungen löschen? Das kann nicht rückgängig gemacht werden.')) return;
             measurements = [];
             save();
             renderTable();
@@ -774,10 +940,29 @@
         // ── Init ──
         renderTable();
 
-        // Register Service Worker for PWA
+        // Register Service Worker for offline support
         if ('serviceWorker' in navigator) {
-            navigator.serviceWorker.register('sw.js').catch(() => {});
+            navigator.serviceWorker.register('sw.js').catch(e => {
+                console.warn('SW registration failed:', e);
+            });
         }
+
+        // Check Web Bluetooth support on load
+        if (!navigator.bluetooth) {
+            $('infoBox').innerHTML = `
+                <strong style="color: var(--danger)">⚠️ Web Bluetooth nicht verfügbar</strong><br>
+                Dieser Browser unterstützt kein Web Bluetooth.<br><br>
+                <strong>Unterstützte Browser:</strong><br>
+                • Chrome / Edge auf Android ✅<br>
+                • Chrome auf Windows / macOS / Linux ✅ (mit HTTPS)<br>
+                • Safari / Firefox / iOS ❌<br><br>
+                <em>Du kannst trotzdem Werte manuell eingeben (✏️ Manuell).</em>
+            `;
+        }
+
+        log('🚀 Laser Measure App geladen');
+        log(`ℹ️ BLE Service: ${BLE_SERVICE_UUID}`);
+        log(`ℹ️ BLE Char:    ${BLE_CHAR_UUID}`);
     </script>
 </body>
 </html>
