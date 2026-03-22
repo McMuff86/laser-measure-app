@@ -1,13 +1,8 @@
-const CACHE = 'laser-measure-v3';
+const CACHE = 'laser-measure-v2';
 const ASSETS = [
   '/',
   '/index.html',
-  '/manifest.json',
-  '/css/app.css',
-  '/js/app.js',
-  '/js/ble.js', 
-  '/js/protocol.js',
-  '/js/storage.js'
+  '/manifest.json'
 ];
 
 self.addEventListener('install', e => {
@@ -18,8 +13,8 @@ self.addEventListener('install', e => {
 });
 
 self.addEventListener('fetch', e => {
-  // Network-first for HTML and JS modules (get latest), cache-first for CSS/assets
-  if (e.request.mode === 'navigate' || e.request.url.endsWith('.js')) {
+  // Network-first for HTML (get latest), cache-first for assets
+  if (e.request.mode === 'navigate') {
     e.respondWith(
       fetch(e.request)
         .then(response => {

@@ -1,0 +1,472 @@
+/**
+ * Laser Measure App Styles
+ * Dark theme optimized for mobile devices
+ */
+
+* { 
+    box-sizing: border-box; 
+    margin: 0; 
+    padding: 0; 
+}
+
+:root {
+    --bg: #0a0a0a;
+    --surface: #161616;
+    --border: #2a2a2a;
+    --text: #e4e4e7;
+    --muted: #71717a;
+    --accent: #22d3ee;
+    --accent-dim: rgba(34, 211, 238, 0.15);
+    --success: #4ade80;
+    --danger: #f87171;
+    --warning: #facc15;
+}
+
+body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Inter', 'Segoe UI', sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    min-height: 100vh;
+    padding: 16px;
+    padding-bottom: 100px;
+}
+
+h1 {
+    font-size: 1.4rem;
+    font-weight: 700;
+    margin-bottom: 4px;
+}
+
+.subtitle {
+    color: var(--muted);
+    font-size: 0.85rem;
+    margin-bottom: 16px;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════════ */
+/* Status Bar */
+/* ═══════════════════════════════════════════════════════════════════════════════ */
+
+.status-bar {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 14px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    margin-bottom: 16px;
+    font-size: 0.9rem;
+}
+
+.status-dot {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    background: var(--danger);
+    flex-shrink: 0;
+}
+
+.status-dot.connected {
+    background: var(--success);
+    box-shadow: 0 0 8px rgba(74, 222, 128, 0.5);
+}
+
+.status-dot.connecting {
+    background: var(--warning);
+    animation: pulse 1s infinite;
+}
+
+@keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.4; }
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════════ */
+/* Buttons */
+/* ═══════════════════════════════════════════════════════════════════════════════ */
+
+.btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    padding: 10px 18px;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    background: var(--surface);
+    color: var(--text);
+    font-size: 0.9rem;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.15s;
+    -webkit-tap-highlight-color: transparent;
+}
+
+.btn:active { 
+    transform: scale(0.97); 
+}
+
+.btn.primary {
+    background: var(--accent);
+    color: #0a0a0a;
+    border-color: var(--accent);
+    font-weight: 600;
+}
+
+.btn.primary:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+}
+
+.btn.danger {
+    border-color: var(--danger);
+    color: var(--danger);
+}
+
+.btn-row {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 16px;
+    flex-wrap: wrap;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════════ */
+/* Measurement Display */
+/* ═══════════════════════════════════════════════════════════════════════════════ */
+
+.measure-display {
+    text-align: center;
+    padding: 24px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    margin-bottom: 16px;
+    position: relative;
+    overflow: hidden;
+}
+
+.measure-display.flash {
+    animation: flash-border 0.4s ease-out;
+}
+
+@keyframes flash-border {
+    0% { 
+        border-color: var(--accent); 
+        box-shadow: 0 0 20px rgba(34, 211, 238, 0.3); 
+    }
+    100% { 
+        border-color: var(--border); 
+        box-shadow: none; 
+    }
+}
+
+.measure-value {
+    font-size: 3rem;
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+    color: var(--accent);
+    line-height: 1.1;
+}
+
+.measure-unit {
+    font-size: 1.2rem;
+    color: var(--muted);
+    margin-left: 4px;
+}
+
+.measure-label {
+    font-size: 0.8rem;
+    color: var(--muted);
+    margin-top: 4px;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════════ */
+/* Form Elements */
+/* ═══════════════════════════════════════════════════════════════════════════════ */
+
+.door-input {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 16px;
+    align-items: center;
+}
+
+.door-input label {
+    font-size: 0.85rem;
+    color: var(--muted);
+    white-space: nowrap;
+}
+
+.door-input input, .door-input select {
+    flex: 1;
+    padding: 10px 12px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    color: var(--text);
+    font-size: 0.95rem;
+    outline: none;
+}
+
+.door-input input:focus, .door-input select:focus {
+    border-color: var(--accent);
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════════ */
+/* Field Selection */
+/* ═══════════════════════════════════════════════════════════════════════════════ */
+
+.field-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    gap: 8px;
+    margin-bottom: 16px;
+}
+
+.field-btn {
+    padding: 12px 8px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    text-align: center;
+    cursor: pointer;
+    transition: all 0.15s;
+    -webkit-tap-highlight-color: transparent;
+}
+
+.field-btn.active {
+    border-color: var(--accent);
+    background: var(--accent-dim);
+}
+
+.field-btn.filled {
+    border-color: var(--success);
+}
+
+.field-btn.active.filled {
+    border-color: var(--accent);
+}
+
+.field-btn .field-name {
+    font-size: 0.75rem;
+    color: var(--muted);
+    margin-bottom: 2px;
+}
+
+.field-btn .field-value {
+    font-size: 1.1rem;
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════════ */
+/* Manual Input */
+/* ═══════════════════════════════════════════════════════════════════════════════ */
+
+.manual-input {
+    display: none;
+    gap: 8px;
+    margin-bottom: 16px;
+    align-items: center;
+}
+
+.manual-input.show { 
+    display: flex; 
+}
+
+.manual-input input {
+    flex: 1;
+    padding: 10px 12px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    color: var(--text);
+    font-size: 1rem;
+    outline: none;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════════ */
+/* Debug Log */
+/* ═══════════════════════════════════════════════════════════════════════════════ */
+
+.log {
+    font-size: 0.75rem;
+    color: var(--muted);
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 10px;
+    max-height: 200px;
+    overflow-y: auto;
+    margin-bottom: 16px;
+    font-family: 'SF Mono', 'Fira Code', monospace;
+    display: none;
+    word-break: break-all;
+}
+
+.log.show { 
+    display: block; 
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════════ */
+/* Data Table */
+/* ═══════════════════════════════════════════════════════════════════════════════ */
+
+.table-wrap {
+    overflow-x: auto;
+    margin-bottom: 16px;
+}
+
+table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.8rem;
+}
+
+th {
+    text-align: left;
+    padding: 8px 10px;
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+    color: var(--muted);
+    font-weight: 500;
+    position: sticky;
+    top: 0;
+    white-space: nowrap;
+}
+
+td {
+    padding: 8px 10px;
+    border-bottom: 1px solid var(--border);
+    white-space: nowrap;
+}
+
+tr:last-child td { 
+    border-bottom: none; 
+}
+
+.delete-btn {
+    background: none;
+    border: none;
+    color: var(--danger);
+    cursor: pointer;
+    padding: 4px;
+    font-size: 1rem;
+    opacity: 0.6;
+}
+
+.delete-btn:active { 
+    opacity: 1; 
+}
+
+.empty-state {
+    text-align: center;
+    padding: 32px 16px;
+    color: var(--muted);
+    font-size: 0.9rem;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════════ */
+/* Badges & Labels */
+/* ═══════════════════════════════════════════════════════════════════════════════ */
+
+.count-badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    background: var(--accent-dim);
+    color: var(--accent);
+    border-radius: 6px;
+    padding: 2px 8px;
+    font-size: 0.8rem;
+    font-weight: 600;
+    margin-left: 8px;
+}
+
+.section-title {
+    font-size: 1rem;
+    font-weight: 600;
+    margin-bottom: 12px;
+    display: flex;
+    align-items: center;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════════ */
+/* Info Boxes */
+/* ═══════════════════════════════════════════════════════════════════════════════ */
+
+.info-box {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 12px;
+    margin-bottom: 16px;
+    font-size: 0.8rem;
+    color: var(--muted);
+    line-height: 1.5;
+}
+
+.info-box strong { 
+    color: var(--text); 
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════════ */
+/* Animations */
+/* ═══════════════════════════════════════════════════════════════════════════════ */
+
+.vibrate { 
+    animation: shake 0.3s; 
+}
+
+@keyframes shake {
+    0%, 100% { transform: translateX(0); }
+    25% { transform: translateX(-4px); }
+    75% { transform: translateX(4px); }
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════════ */
+/* Responsive Design */
+/* ═══════════════════════════════════════════════════════════════════════════════ */
+
+@media (max-width: 480px) {
+    body {
+        padding: 12px;
+        padding-bottom: 80px;
+    }
+    
+    h1 {
+        font-size: 1.2rem;
+    }
+    
+    .measure-value {
+        font-size: 2.5rem;
+    }
+    
+    .btn-row {
+        flex-direction: column;
+    }
+    
+    .btn-row .btn {
+        width: 100%;
+        justify-content: center;
+    }
+}
+
+@media (max-width: 360px) {
+    .field-row {
+        gap: 6px;
+    }
+    
+    .field-btn {
+        padding: 10px 6px;
+    }
+    
+    .field-btn .field-name {
+        font-size: 0.7rem;
+    }
+    
+    .field-btn .field-value {
+        font-size: 1rem;
+    }
+}

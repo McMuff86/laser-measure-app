@@ -1,96 +1,162 @@
-# 📐 Laser Measure – Bosch GLM 50C BLE PWA
+# Laser Measure App
 
-Progressive Web App zur Erfassung von Türmassen mit dem Bosch GLM 50C / 50CG Laser-Messgerät via Web Bluetooth (BLE).
+PWA for measuring door dimensions with Bosch GLM 50C/50CG laser distance meters via Bluetooth Low Energy (BLE).
 
 ## Features
 
-- **BLE Verbindung** zum Bosch GLM 50C/50CG über Web Bluetooth
-- **Auto-Empfang** von Messwerten (Knopf am Gerät drücken)
-- **3 Felder pro Tür:** Breite, Höhe, Wandstärke
-- **Auto-Advance** zum nächsten leeren Feld nach Messung
-- **Auto-Increment** Tür-Nummer bei "Nächste"
-- **CSV Export** mit Semikolon-Trennung (Excel-kompatibel)
-- **Offline-fähig** via Service Worker
-- **Manuelle Eingabe** als Fallback
-- **Auto-Reconnect** bei Verbindungsverlust
+- **📱 PWA**: Works offline, installable on mobile devices
+- **🔵 Bluetooth LE**: Connect to Bosch GLM 50C/50-27 CG via Web Bluetooth API  
+- **📏 3-Field Measurement**: Width, Height, Wall Thickness per door
+- **🔄 Auto-advance**: Automatically moves to next empty field after measurement
+- **💾 Local Storage**: Persistent measurement storage with CSV export
+- **🔧 Manual Input**: Fallback for manual value entry
+- **📊 Data Table**: View and manage all measurements
+- **🌙 Dark Theme**: Optimized for mobile use in various lighting conditions
 
-## Setup zum Testen
+## Device Compatibility
 
-### Voraussetzungen
+### Supported Laser Meters
+- **Bosch GLM 50C** ✅
+- **Bosch GLM 50-27 CG** ✅ 
+- **Bosch GLM 100C** ✅ (likely)
+- **Bosch PLR 30C/40C/50C** ✅ (likely)
 
-1. **Bosch GLM 50C oder 50CG** (mit Bluetooth/BLE)
-2. **Chrome oder Edge** (kein Safari/Firefox!)
-3. **HTTPS** erforderlich (oder `localhost`)
+### Browser Support
+- **Chrome/Edge on Android** ✅
+- **Chrome on Windows/macOS/Linux** ✅ (requires HTTPS)
+- **Safari/Firefox/iOS** ❌ (no Web Bluetooth support)
 
-### Starten
+## Quick Start
 
-```bash
-# Option 1: Python HTTP Server (nur für localhost-Test)
-cd ~/projects/laser-measure-app
-python3 -m http.server 8080
-# → Öffne http://localhost:8080
+1. **Device Setup**:
+   - Turn on your Bosch GLM 50C
+   - Activate Bluetooth (BT symbol on device display)
 
-# Option 2: Mit HTTPS (für BLE auf Android notwendig)
-# Nutze z.B. caddy, nginx mit SSL, oder ngrok
-npx serve -s . --ssl-cert cert.pem --ssl-key key.pem
-```
+2. **Connect**:
+   - Open app in supported browser
+   - Tap "Verbinden" → select your laser meter
+   - Wait for "Verbunden" status
 
-### Auf Android testen
+3. **Measure**:
+   - Enter door ID (e.g., "OH1-EG-101")  
+   - Press measurement button on laser meter
+   - Value auto-fills current field (Width → Height → Wall Thickness)
+   - Tap "Tür speichern" when done
 
-Web Bluetooth funktioniert am besten auf **Chrome für Android**:
+4. **Export**:
+   - Use "📥 CSV Export" to download data
+   - Compatible with Excel/LibreOffice
 
-1. HTTPS-URL öffnen (oder `chrome://flags` → `#unsafely-treat-insecure-origin-as-secure`)
-2. Bosch GLM einschalten
-3. Bluetooth am GLM aktivieren (BT-Taste drücken bis BT-Symbol blinkt)
-4. In der App "Verbinden" drücken
-5. GLM in der Liste auswählen
-6. Messen am Gerät → Wert erscheint automatisch
-
-### Desktop Chrome
-
-Auf Desktop Chrome funktioniert Web Bluetooth ebenfalls:
-- HTTPS erforderlich
-- Oder mit Flag: `chrome://flags/#enable-experimental-web-platform-features`
-
-## BLE Protokoll
-
-Siehe [BLE Research Dokument](../../clawd/research/solid-ai/laser-measure-ble-research.md) für Details.
-
-**Kurzfassung:**
-- Service UUID: `02a6c0d0-0451-4000-b000-fb3210111989`
-- Characteristic UUID: `02a6c0d1-0451-4000-b000-fb3210111989`
-- Sync-Befehl: `C0 55 02 01 00 1A` (aktiviert Mess-Indikationen)
-- Messdaten: Prefix `C0 55 10 06`, Float32 LE an Offset 7-10 (Meter)
-
-## Dateistruktur
+## Project Structure
 
 ```
 laser-measure-app/
-├── index.html      # Alles-in-einer-Datei (HTML + CSS + JS)
-├── manifest.json   # PWA Manifest
-├── sw.js           # Service Worker für Offline-Support
-└── README.md       # Diese Datei
+├── index.html          # Main PWA shell
+├── manifest.json       # PWA manifest
+├── sw.js              # Service Worker for offline support
+├── css/
+│   └── app.css        # Application styles
+├── js/
+│   ├── app.js         # Main application logic & UI
+│   ├── ble.js         # Bluetooth LE connection management
+│   ├── protocol.js    # Bosch GLM BLE protocol implementation
+│   └── storage.js     # Local storage & CSV export
+└── README.md          # This file
 ```
 
-## Kompatible Geräte
+## Technical Implementation
 
-| Gerät | Status |
-|-------|--------|
-| Bosch GLM 50C | Sollte funktionieren (gleiche BLE-Protokollfamilie) |
-| Bosch GLM 50-27 CG | Getestet & bestätigt (ketan/Bosch-GLM50C-Rangefinder) |
-| Bosch GLM 100C | Möglicherweise (RFCOMM, nicht BLE) |
-| Bosch PLR 30/40/50C | Unbekannt |
+### BLE Protocol
 
-## Bekannte Einschränkungen
+The app implements the Bosch GLM BLE protocol based on reverse-engineering research:
 
-- **iOS/Safari:** Kein Web Bluetooth Support
-- **Firefox:** Kein Web Bluetooth Support
-- **Remote-Messung:** Nicht alle Modelle unterstützen das Auslösen einer Messung über BLE – physischer Knopf am Gerät ist nötig
-- **Pairing:** Einige Geräte erfordern erstmaliges Pairing über OS Bluetooth-Einstellungen
+- **Service UUID**: `02a6c0d0-0451-4000-b000-fb3210111989`
+- **Characteristic UUID**: `02a6c0d1-0451-4000-b000-fb3210111989`
+- **Sync Command**: `[0xC0, 0x55, 0x02, 0x01, 0x00, 0x1A]`
+- **Measurement Data**: Float32 (little-endian) at bytes 7-10 in BLE notifications
 
-## Credits
+### Architecture
 
-BLE-Protokoll reverse-engineered basierend auf:
-- [ketan/Bosch-GLM50C-Rangefinder](https://github.com/ketan/Bosch-GLM50C-Rangefinder) (ESP32 + Python)
-- [philipptrenz/BOSCH-GLM-rangefinder](https://github.com/philipptrenz/BOSCH-GLM-rangefinder) (RFCOMM)
-- [EEVblog Forum: Hacking the Bosch GLM 20](https://www.eevblog.com/forum/projects/hacking-the-bosch-glm-20-laser-measuring-tape/)
+- **ES6 Modules**: Clean separation of concerns, no build step required
+- **Web Bluetooth API**: Native browser BLE support
+- **LocalStorage**: Persistent data with versioning
+- **PWA**: Service Worker caching for offline capability
+- **Mobile-first**: Touch-optimized UI with haptic feedback
+
+### Protocol References
+
+- [ESP32 Implementation](https://gist.github.com/ketan/054e9f4173aa53a04218fc545241f634) - BLE protocol details
+- [Python GLM Library](https://github.com/philipptrenz/BOSCH-GLM-rangefinder) - RFCOMM protocol  
+- [Protocol Analysis](https://gist.github.com/gmcmicken/b61180a895666475eeaad0dc20719915) - Message format documentation
+
+## Development
+
+### Local Development
+
+```bash
+# Serve over HTTPS (required for Web Bluetooth)
+python -m http.server 8000 --bind 127.0.0.1
+
+# Or use any HTTPS dev server
+npx serve -s . --listen 8000
+```
+
+**Note**: Web Bluetooth requires HTTPS, even for localhost testing.
+
+### File Structure
+
+- **`protocol.js`**: Contains all BLE protocol knowledge with extensive documentation
+- **`ble.js`**: Handles Web Bluetooth connection lifecycle and auto-reconnection  
+- **`storage.js`**: Manages localStorage with versioning and CSV export/import
+- **`app.js`**: Coordinates UI, measurement workflow, and module interactions
+
+### Key Features
+
+- **Auto-reconnection**: Handles temporary BLE disconnects
+- **Protocol validation**: Sanity checks for measurement data
+- **Error handling**: Graceful fallbacks for unsupported operations
+- **Debug logging**: Comprehensive logging for troubleshooting
+- **Mobile optimization**: Touch events, vibration feedback
+
+## Usage Tips
+
+### Measurement Workflow
+
+1. **Field Selection**: Active field highlighted in cyan
+2. **Auto-advance**: After each measurement, advances to next empty field
+3. **Manual Override**: Use field buttons to change active field
+4. **Manual Input**: ✏️ button for manual value entry
+5. **Door Management**: Auto-increment door numbers (e.g., "101" → "102")
+
+### Troubleshooting
+
+- **Connection Issues**: Check Bluetooth is enabled on both devices
+- **No Measurements**: Ensure sync command was successful (check debug log)
+- **Wrong Values**: Verify measurement distance is reasonable (0-100m range)
+- **Browser Compatibility**: Use Chrome/Edge on Android for best results
+
+### Data Export
+
+- **CSV Format**: German locale (semicolon separator)
+- **UTF-8 BOM**: Proper encoding for Excel
+- **Timestamp**: ISO format for sortability
+- **Empty Values**: Blank cells for missing measurements
+
+## License
+
+MIT License - See LICENSE file for details.
+
+## Contributing
+
+1. Fork the repository
+2. Create feature branch (`git checkout -b feature/amazing-feature`)
+3. Commit changes (`git commit -m 'Add amazing feature'`)
+4. Push to branch (`git push origin feature/amazing-feature`)
+5. Open Pull Request
+
+## Acknowledgments
+
+- Bosch GLM protocol reverse-engineering community
+- [ketan](https://github.com/ketan) for ESP32 BLE implementation
+- [philipptrenz](https://github.com/philipptrenz) for RFCOMM protocol documentation
+- Web Bluetooth community for API implementation examples
