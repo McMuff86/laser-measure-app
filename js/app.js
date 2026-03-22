@@ -574,7 +574,7 @@ class LaserMeasureApp {
         const logMessage = `[${time}] ${message}`;
         
         // Add to debug log
-        this.elements.debugLog.innerHTML += logMessage + '\\n';
+        this.elements.debugLog.innerHTML += logMessage + '\n';
         this.elements.debugLog.scrollTop = this.elements.debugLog.scrollHeight;
         
         // Console log
@@ -585,7 +585,7 @@ class LaserMeasureApp {
      * Show error message
      */
     showError(title, message) {
-        alert(`${title}\\n\\n${message}`);
+        alert(`${title}\n\n${message}`);
     }
     
     /**
