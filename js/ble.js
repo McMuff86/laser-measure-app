@@ -142,6 +142,17 @@ export class GLMBleConnection {
      * @private
      */
     async _requestDevice() {
+        // Known Bosch GLM service UUIDs (different models use different UUIDs)
+        const KNOWN_SERVICES = [
+            BLE_SERVICE_UUID,                              // GLM 50C / 50-27 CG
+            '00001800-0000-1000-8000-00805f9b34fb',       // Generic Access
+            '00001801-0000-1000-8000-00805f9b34fb',       // Generic Attribute
+            '0000180a-0000-1000-8000-00805f9b34fb',       // Device Information
+            '0000fff0-0000-1000-8000-00805f9b34fb',       // Common BLE peripheral service
+            '0000ffe0-0000-1000-8000-00805f9b34fb',       // Common BLE UART-like service
+            '6e400001-b5a3-f393-e0a9-e50e24dcca9e',       // Nordic UART Service
+        ];
+
         // Strategy 1: Try name-based filters first
         try {
             const filters = COMPATIBLE_DEVICES.map(name => ({ namePrefix: name }));
@@ -149,7 +160,7 @@ export class GLMBleConnection {
             
             return await navigator.bluetooth.requestDevice({
                 filters: filters,
-                optionalServices: [BLE_SERVICE_UUID]
+                optionalServices: KNOWN_SERVICES
             });
         } catch (filterError) {
             this._log('Name-based scan failed, trying broad scan...');
@@ -157,7 +168,7 @@ export class GLMBleConnection {
             // Strategy 2: Fallback to acceptAllDevices
             return await navigator.bluetooth.requestDevice({
                 acceptAllDevices: true,
-                optionalServices: [BLE_SERVICE_UUID]
+                optionalServices: KNOWN_SERVICES
             });
         }
     }
@@ -178,11 +189,41 @@ export class GLMBleConnection {
             let service;
             try {
                 service = await this.server.getPrimaryService(BLE_SERVICE_UUID);
-                this._log('GLM BLE service found');
+                this._log('GLM BLE service found (primary UUID)');
             } catch (serviceError) {
-                // Debug: list available services
-                await this._debugListServices();
-                throw new Error('Bosch GLM BLE service not found. Is this a GLM 50C/50CG?');
+                this._log('Primary service UUID not found, scanning all services...');
+                // Debug: list available services and try to find one that works
+                const foundServices = await this._debugListServices();
+                
+                // Try known alternative service UUIDs
+                const alternatives = [
+                    '0000fff0-0000-1000-8000-00805f9b34fb',
+                    '0000ffe0-0000-1000-8000-00805f9b34fb',
+                    '6e400001-b5a3-f393-e0a9-e50e24dcca9e',
+                ];
+                
+                for (const altUuid of alternatives) {
+                    try {
+                        service = await this.server.getPrimaryService(altUuid);
+                        this._log(`Found alternative service: ${altUuid}`);
+                        break;
+                    } catch (e) { /* try next */ }
+                }
+                
+                // Also try any discovered non-standard services
+                if (!service && foundServices) {
+                    for (const svc of foundServices) {
+                        if (!svc.uuid.startsWith('00001800') && !svc.uuid.startsWith('00001801')) {
+                            service = svc;
+                            this._log(`Using discovered service: ${svc.uuid}`);
+                            break;
+                        }
+                    }
+                }
+                
+                if (!service) {
+                    throw new Error('Bosch GLM BLE service not found. Check debug log for available services.');
+                }
             }
             
             // Get characteristic
@@ -225,8 +266,10 @@ export class GLMBleConnection {
             services.forEach(service => {
                 this._log(`  → ${service.uuid}`);
             });
+            return services;
         } catch (error) {
             this._log('Cannot list services');
+            return null;
         }
     }
     
